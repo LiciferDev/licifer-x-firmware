@@ -8,6 +8,7 @@
 #include <NimBLEDevice.h>
 #include <NimBLEAdvertising.h>
 #include <DNSServer.h>
+#include <driver/temp_sensor.h>
 
 // ---------- Конфигурация ----------
 #define FORMAT_LITTLEFS_IF_FAILED true
@@ -72,11 +73,20 @@ int portalLogLen = 0, pmkidBufferLen = 0;
 String apPassword = AP_PASS;
 
 // ---------- Встроенный датчик температуры ESP32‑S3 ----------
-extern "C" {
-  int8_t temprature_sens_read();
-}
 float readChipTemp() {
-  return (temprature_sens_read() - 32) / 1.8;
+  static temp_sensor_handle_t temp_handle = nullptr;
+  
+  if (temp_handle == nullptr) {
+    temp_sensor_config_t temp_sensor = TEMP_SENSOR_CONFIG_DEFAULT(-10, 80);
+    temp_sensor_install(&temp_sensor, &temp_handle);
+    temp_sensor_enable(temp_handle);
+  }
+  
+  float tsens_out = 0;
+  if (temp_handle != nullptr) {
+    temp_sensor_read_celsius(temp_handle, &tsens_out);
+  }
+  return tsens_out;
 }
 
 // ---------- Работа с логами ----------
