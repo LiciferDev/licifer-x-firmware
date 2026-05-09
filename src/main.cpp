@@ -65,11 +65,11 @@ struct AttackState {
   unsigned long lastLogFlush = 0;
 } attack;
 
-// Глобальные статические буферы JSON для WebSocket
-StaticJsonDocument<512> wsJsonDoc;      // Для команд
-StaticJsonDocument<2048> scanJsonDoc;   // Для результатов сканирования
-StaticJsonDocument<256> statJsonDoc;    // Для статуса атак
-StaticJsonDocument<256> clientJsonDoc;  // Для клиентов
+// Глобальные статические буферы JSON
+StaticJsonDocument<512> wsJsonDoc;      // команды
+StaticJsonDocument<2048> scanJsonDoc;   // результаты сканирования
+StaticJsonDocument<256> statJsonDoc;    // статус
+StaticJsonDocument<256> clientJsonDoc;  // клиенты
 
 char* portalLogBuffer = nullptr;
 char* pmkidBuffer = nullptr;
@@ -282,7 +282,6 @@ void autoPwnTask(void*) {
 }
 
 void bleSpamTask(void*) {
-  // Даём время системе стабилизироваться перед инициализацией NimBLE
   delay(1000);
   NimBLEDevice::init("Licifer_BLE");
   NimBLEDevice::setPower(ESP_PWR_LVL_P9);
@@ -441,7 +440,6 @@ void setup() {
   Serial.println("\n\n--- LICIFER X (N16R8) ---");
   Serial.printf("Flash: %d MB, PSRAM: %d MB\n", 16, ESP.getPsramSize() / (1024 * 1024));
 
-  // 1. Файловая система
   if (!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED)) {
     Serial.println("ERROR: LittleFS mount failed!");
     return;
@@ -450,7 +448,6 @@ void setup() {
   if (!LittleFS.exists(PORTAL_LOG)) { File f = LittleFS.open(PORTAL_LOG, "w"); if (f) f.close(); }
   if (!LittleFS.exists(PMKID_FILE)) { File f = LittleFS.open(PMKID_FILE, "w"); if (f) f.close(); }
 
-  // 2. Буферы в PSRAM
   if (psramFound()) {
     portalLogBuffer = (char*)ps_malloc(LOG_BUFFER_SIZE);
     pmkidBuffer = (char*)ps_malloc(LOG_BUFFER_SIZE);
@@ -461,7 +458,6 @@ void setup() {
   if (portalLogBuffer) memset(portalLogBuffer, 0, LOG_BUFFER_SIZE);
   if (pmkidBuffer) memset(pmkidBuffer, 0, LOG_BUFFER_SIZE);
 
-  // 3. Загрузка настроек
   if (LittleFS.exists(CONFIG_FILE)) {
     File f = LittleFS.open(CONFIG_FILE, "r");
     if (f) {
@@ -473,7 +469,6 @@ void setup() {
     }
   }
 
-  // 4. Запуск Wi-Fi
   WiFi.mode(WIFI_AP_STA);
   WiFi.softAPConfig(AP_IP, AP_IP, AP_MASK);
   WiFi.softAP(AP_SSID, apPassword.c_str());
@@ -482,7 +477,6 @@ void setup() {
   esp_wifi_set_promiscuous(true);
   esp_wifi_set_promiscuous_rx_cb(promiscuousCallback);
 
-  // 5. Запуск задач
   xTaskCreatePinnedToCore(webServerTask, "WebUI", 10240, NULL, 1, NULL, 0);
   xTaskCreatePinnedToCore(wifiAttackTask, "WiFiAtk", 6144, NULL, 2, NULL, 1);
   xTaskCreatePinnedToCore(autoPwnTask, "AutoPwn", 8192, NULL, 2, NULL, 1);
