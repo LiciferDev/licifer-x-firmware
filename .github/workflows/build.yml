@@ -73,7 +73,7 @@ jobs:
             0x8000 "$PARTITIONS" \
             0xe000 "$BOOT_APP0" \
             0x10000 "$FIRMWARE" \
-            0xA10000 "$LITTLEFS"
+            0x510000 "$LITTLEFS"
 
       - name: Upload merged firmware
         uses: actions/upload-artifact@v4
