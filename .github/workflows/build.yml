@@ -1,0 +1,64 @@
+name: Build ESP32-S3 Firmware
+
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: ${{ runner.os }}-pio-${{ hashFiles('platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-pio-
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio esptool
+
+      - name: Build firmware and filesystem
+        run: |
+          pio run -e esp32-s3-n16r8
+
+      - name: Merge into single flashable binary
+        run: |
+          BOOTLOADER="$HOME/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/bin/bootloader_qio_80m.bin"
+          PARTITIONS=".pio/build/esp32-s3-n16r8/partitions_custom.bin"
+          FIRMWARE=".pio/build/esp32-s3-n16r8/firmware.bin"
+          LITTLEFS=".pio/build/esp32-s3-n16r8/littlefs.bin"
+          MERGED="licifer_x_n16r8_full.bin"
+
+          python -m esptool --chip esp32s3 merge_bin \
+            -o $MERGED \
+            --flash_mode qio \
+            --flash_freq 80m \
+            --flash_size 16MB \
+            0x0 "$BOOTLOADER" \
+            0x8000 "$PARTITIONS" \
+            0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
+            0x10000 "$FIRMWARE" \
+            0x610000 "$LITTLEFS"
+
+      - name: Upload merged firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: licifer_x_n16r8_full
+          path: licifer_x_n16r8_full.bin
