@@ -5,7 +5,7 @@ on:
     paths-ignore:
       - '**.md'
   pull_request:
-  workflow_dispatch:  # позволяет запускать вручную
+  workflow_dispatch:
 
 jobs:
   build:
@@ -40,29 +40,31 @@ jobs:
 
       - name: Merge into single flashable binary
         run: |
-          # Путь к bootloader.bin, сгенерированному PlatformIO при сборке
-          BOOTLOADER_BIN=".pio/build/esp32-s3-n16r8/bootloader.bin"
-          # Путь к boot_app0.bin (берется из самого фреймворка)
-          BOOT_APP0_BIN="$HOME/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin"
-          
-          # Проверяем, что bootloader.bin существует
-          if [ ! -f "$BOOTLOADER_BIN" ]; then
-            echo "Error: $BOOTLOADER_BIN not found!"
-            echo "Available files in .pio/build/esp32-s3-n16r8/:"
-            ls .pio/build/esp32-s3-n16r8/
-            exit 1
-          fi
+          BOOTLOADER=".pio/build/esp32-s3-n16r8/bootloader.bin"
+          PARTITIONS=".pio/build/esp32-s3-n16r8/partitions.bin"
+          BOOT_APP0="$HOME/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin"
+          FIRMWARE=".pio/build/esp32-s3-n16r8/firmware.bin"
+          LITTLEFS=".pio/build/esp32-s3-n16r8/littlefs.bin"
+          MERGED="licifer_x_n16r8_full.bin"
+
+          # Проверяем наличие всех файлов
+          for file in "$BOOTLOADER" "$PARTITIONS" "$BOOT_APP0" "$FIRMWARE" "$LITTLEFS"; do
+            if [ ! -f "$file" ]; then
+              echo "Error: $file not found"
+              exit 1
+            fi
+          done
 
           python -m esptool --chip esp32s3 merge-bin \
-            -o licifer_x_n16r8_full.bin \
+            -o "$MERGED" \
             --flash-mode qio \
             --flash-freq 80m \
             --flash-size 16MB \
-            0x0 "$BOOTLOADER_BIN" \
-            0x8000 .pio/build/esp32-s3-n16r8/partitions_custom.bin \
-            0xe000 "$BOOT_APP0_BIN" \
-            0x10000 .pio/build/esp32-s3-n16r8/firmware.bin \
-            0x610000 .pio/build/esp32-s3-n16r8/littlefs.bin
+            0x0 "$BOOTLOADER" \
+            0x8000 "$PARTITIONS" \
+            0xe000 "$BOOT_APP0" \
+            0x10000 "$FIRMWARE" \
+            0xA10000 "$LITTLEFS"
 
       - name: Upload merged firmware
         uses: actions/upload-artifact@v4
