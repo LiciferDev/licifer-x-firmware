@@ -34,9 +34,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install platformio esptool
 
-      - name: Build firmware and filesystem
+      - name: Build firmware
         run: |
           pio run -e esp32-s3-n16r8
+
+      - name: Build filesystem image (LittleFS)
+        run: |
+          pio run --target buildfs -e esp32-s3-n16r8
 
       - name: Merge into single flashable binary
         run: |
@@ -47,13 +51,18 @@ jobs:
           LITTLEFS=".pio/build/esp32-s3-n16r8/littlefs.bin"
           MERGED="licifer_x_n16r8_full.bin"
 
-          # Проверяем наличие всех файлов
+          # Проверяем наличие всех обязательных файлов
+          missing=0
           for file in "$BOOTLOADER" "$PARTITIONS" "$BOOT_APP0" "$FIRMWARE" "$LITTLEFS"; do
             if [ ! -f "$file" ]; then
               echo "Error: $file not found"
-              exit 1
+              missing=1
             fi
           done
+          if [ $missing -eq 1 ]; then
+            echo "Aborting merge due to missing files"
+            exit 1
+          fi
 
           python -m esptool --chip esp32s3 merge-bin \
             -o "$MERGED" \
