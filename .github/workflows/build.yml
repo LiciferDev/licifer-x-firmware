@@ -35,48 +35,33 @@ jobs:
           pip install platformio esptool
 
       - name: Build firmware
-        run: |
-          pio run -e esp32-s3-n16r8
+        run: pio run -e esp32-s3-n16r8
 
       - name: Build filesystem image (LittleFS)
+        run: pio run --target buildfs -e esp32-s3-n16r8
+
+      - name: Prepare artifacts and flash command
         run: |
-          pio run --target buildfs -e esp32-s3-n16r8
+          mkdir -p artifacts
+          cp .pio/build/esp32-s3-n16r8/bootloader.bin artifacts/
+          cp .pio/build/esp32-s3-n16r8/partitions.bin artifacts/
+          cp .pio/build/esp32-s3-n16r8/firmware.bin artifacts/
+          cp .pio/build/esp32-s3-n16r8/littlefs.bin artifacts/
+          cp ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin artifacts/
 
-      - name: Merge into single flashable binary
-        run: |
-          BOOTLOADER=".pio/build/esp32-s3-n16r8/bootloader.bin"
-          PARTITIONS=".pio/build/esp32-s3-n16r8/partitions.bin"
-          BOOT_APP0="$HOME/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin"
-          FIRMWARE=".pio/build/esp32-s3-n16r8/firmware.bin"
-          LITTLEFS=".pio/build/esp32-s3-n16r8/littlefs.bin"
-          MERGED="licifer_x_n16r8_full.bin"
+          # Создаём готовую команду для прошивки
+          echo 'esptool.py --chip esp32s3 write_flash \
+            0x0 bootloader.bin \
+            0x8000 partitions.bin \
+            0xe000 boot_app0.bin \
+            0x10000 firmware.bin \
+            0x510000 littlefs.bin' > artifacts/flash_command.sh
 
-          # Проверяем наличие всех обязательных файлов
-          missing=0
-          for file in "$BOOTLOADER" "$PARTITIONS" "$BOOT_APP0" "$FIRMWARE" "$LITTLEFS"; do
-            if [ ! -f "$file" ]; then
-              echo "Error: $file not found"
-              missing=1
-            fi
-          done
-          if [ $missing -eq 1 ]; then
-            echo "Aborting merge due to missing files"
-            exit 1
-          fi
+          # Суммарный размер всех файлов
+          echo "Total size: $(du -sh artifacts/ | tail -1 | cut -f1)"
 
-          python -m esptool --chip esp32s3 merge-bin \
-            -o "$MERGED" \
-            --flash-mode qio \
-            --flash-freq 80m \
-            --flash-size 16MB \
-            0x0 "$BOOTLOADER" \
-            0x8000 "$PARTITIONS" \
-            0xe000 "$BOOT_APP0" \
-            0x10000 "$FIRMWARE" \
-            0x510000 "$LITTLEFS"
-
-      - name: Upload merged firmware
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: licifer_x_n16r8_full
-          path: licifer_x_n16r8_full.bin
+          name: firmware_components
+          path: artifacts/
