@@ -497,7 +497,8 @@ void setup() {
       StaticJsonDocument<256> cfg;
       deserializeJson(cfg, f);
       f.close();
-      apPassword = cfg["ap_pass"].as<String>() | AP_PASS;
+      String temp = cfg["ap_pass"].as<String>();
+      apPassword = (temp.length() > 0) ? temp : AP_PASS;
     }
   }
   File f = LittleFS.open(PMKID_FILE,"r");
