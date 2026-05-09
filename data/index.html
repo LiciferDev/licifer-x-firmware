@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Licifer X — ESP32-S3 N16R8</title>
+    <style>
+        :root {
+            --bg: #0a0f18;
+            --surface: #131a26;
+            --border: #233044;
+            --text: #e0e4ec;
+            --dim: #7c879c;
+            --accent: #00e5ff;
+            --danger: #ff4070;
+            --success: #00e676;
+            --warning: #ffab40;
+            --radius: 10px;
+            --shadow: 0 4px 24px rgba(0,0,0,0.3);
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            min-height: 100vh;
+        }
+        aside {
+            width: 260px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            padding: 28px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            position: fixed;
+            top: 0; left: 0; bottom: 0;
+            overflow-y: auto;
+            z-index: 10;
+        }
+        aside .logo {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--accent);
+            margin-bottom: 24px;
+            letter-spacing: -0.5px;
+        }
+        aside nav {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+        }
+        aside nav a {
+            color: var(--dim);
+            text-decoration: none;
+            padding: 11px 16px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        aside nav a:hover { background: rgba(0,229,255,0.06); color: var(--text); }
+        aside nav a.active { background: rgba(0,229,255,0.12); color: var(--accent); font-weight: 600; }
+        aside .version {
+            margin-top: auto;
+            font-size: 0.75rem;
+            color: var(--dim);
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+        main {
+            margin-left: 260px;
+            flex: 1;
+            padding: 32px 40px;
+            max-width: 1200px;
+        }
+        .tab { display: none; }
+        .tab.active { display: block; }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow);
+        }
+        .card h2 { font-size: 1.25rem; color: var(--accent); margin-bottom: 16px; }
+        .card h3 { font-size: 1.05rem; color: var(--text); margin-bottom: 12px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+        .stat {
+            background: var(--bg);
+            padding: 16px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+        .stat .value { font-size: 2rem; font-weight: 700; color: var(--accent); }
+        .stat .label { font-size: 0.8rem; color: var(--dim); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin: 2px;
+        }
+        .status-badge.on { background: var(--success); color: #000; }
+        .status-badge.off { background: var(--border); color: var(--dim); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--accent); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; }
+        tr:hover { background: rgba(0,229,255,0.03); }
+        button {
+            background: var(--accent);
+            color: #000;
+            border: none;
+            padding: 9px 18px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            margin: 2px;
+            transition: all 0.2s;
+        }
+        button:hover { box-shadow: 0 0 20px rgba(0,229,255,0.4); transform: translateY(-1px); }
+        button.danger { background: var(--danger); }
+        button.danger:hover { box-shadow: 0 0 20px rgba(255,64,112,0.4); }
+        button.secondary { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+        button.small { padding: 4px 10px; font-size: 0.75rem; }
+        .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+        input, select {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 9px 14px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border 0.2s;
+        }
+        input:focus, select:focus { border-color: var(--accent); }
+        pre {
+            background: var(--bg);
+            padding: 16px;
+            border-radius: var(--radius);
+            font-size: 0.8rem;
+            max-height: 280px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            border: 1px solid var(--border);
+        }
+        .divider {
+            border-top: 1px solid var(--border);
+            margin: 20px 0;
+        }
+        .rssi-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        .rssi-dot.good { background: var(--success); }
+        .rssi-dot.mid { background: var(--warning); }
+        .rssi-dot.bad { background: var(--danger); }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 4px;
+            transition: width 0.5s;
+        }
+        @media (max-width: 768px) {
+            aside { width: 100%; height: auto; position: relative; flex-direction: row; flex-wrap: wrap; padding: 12px; }
+            aside nav { flex-direction: row; flex-wrap: wrap; }
+            main { margin-left: 0; padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+<aside>
+    <div class="logo">⚡ Licifer X 3.0</div>
+    <nav>
+        <a class="active" data-tab="dashboard">📊 Дашборд</a>
+        <a data-tab="wifi-scan">📡 WiFi Сканер</a>
+        <a data-tab="wifi-attacks">📶 WiFi Атаки</a>
+        <a data-tab="ble-attacks">🔷 Bluetooth Атаки</a>
+        <a data-tab="auto-pwn">🎯 Auto-Pwn</a>
+        <a data-tab="evil-portal">🎣 Evil Portal</a>
+        <a data-tab="device-intel">🕵️ Device Intel</a>
+        <a data-tab="settings">⚙️ Настройки</a>
+    </nav>
+    <div class="version">ESP32-S3 N16R8 · v3.0.0<br>Flash: 16 MB | PSRAM: 8 MB</div>
+</aside>
+
+<main>
+    <!-- ═══ ДАШБОРД ═══ -->
+    <div id="dashboard" class="tab active">
+        <div class="grid">
+            <div class="stat"><div class="value" id="netCount">—</div><div class="label">WiFi Сетей</div></div>
+            <div class="stat"><div class="value" id="clientCount">—</div><div class="label">Клиентов</div></div>
+            <div class="stat"><div class="value" id="pmkidCount">—</div><div class="label">PMKID Хешей</div></div>
+            <div class="stat"><div class="value" id="cpuTemp">—</div><div class="label">Температура °C</div></div>
+        </div>
+        <div class="card" style="margin-top:20px;">
+            <h2>Статус атак</h2>
+            <div class="row" style="gap:10px;">
+                <span>WiFi:</span>
+                <span class="status-badge off" id="deauthBadge">Deauth</span>
+                <span class="status-badge off" id="beaconBadge">Beacon</span>
+                <span class="status-badge off" id="karmaBadge">Karma</span>
+                <span class="status-badge off" id="autoPwnBadge">Auto-Pwn</span>
+                <span style="margin-left:16px;">BLE:</span>
+                <span class="status-badge off" id="bleBadge">BLE Spam</span>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Загрузка PSRAM</h2>
+            <div id="psramBar" class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+            <small id="psramText" style="color:var(--dim)">Загрузка...</small>
+        </div>
+    </div>
+
+    <!-- ═══ WIFI СКАНЕР ═══ -->
+    <div id="wifi-scan" class="tab">
+        <div class="row" style="margin-bottom:16px;">
+            <button onclick="cmd('start_scan')">🔍 Сканировать</button>
+            <span id="scanMsg" style="color:var(--dim); font-size:0.85rem;"></span>
+        </div>
+        <div class="card" style="overflow-x:auto;">
+            <table id="netTable">
+                <thead><tr><th>SSID</th><th>BSSID</th><th>RSSI</th><th>Ch</th><th>Шифр</th><th>WPS</th><th>Действия</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ═══ WIFI АТАКИ ═══ -->
+    <div id="wifi-attacks" class="tab">
+        <div class="card">
+            <h2>🔫 Deauth Attack</h2>
+            <p style="color:var(--dim); font-size:0.85rem; margin-bottom:10px;">Принудительное отключение клиентов от точки доступа.</p>
+            <div class="row">
+                <input type="text" id="deauthBssid" placeholder="BSSID цели" style="width:180px;">
+                <input type="text" id="deauthSta" placeholder="MAC клиента (опц.)" style="width:180px;">
+                <input type="number" id="deauthCh" value="1" min="1" max="14" style="width:70px;" title="Канал">
+                <button onclick="cmd('start_deauth')">▶ Старт</button>
+                <button class="danger" onclick="cmd('stop_deauth')">⏹ Стоп</button>
+            </div>
+        </div>
+        <div class="card">
+            <h2>📢 Beacon Flood</h2>
+            <p style="color:var(--dim); font-size:0.85rem; margin-bottom:10px;">Создание множества фальшивых точек доступа.</p>
+            <div class="row">
+                <input type="number" id="beaconCount" value="50" min="1" max="500" style="width:80px;" title="Количество SSID">
+                <button onclick="cmd('start_beacon')">▶ Спамить</button>
+                <button class="danger" onclick="cmd('stop_beacon')">⏹ Стоп</button>
+            </div>
+        </div>
+        <div class="card">
+            <h2>🎭 Karma Attack</h2>
+            <p style="color:var(--dim); font-size:0.85rem; margin-bottom:10px;">Притворяется любой сетью, которую ищут клиенты.</p>
+            <div class="row">
+                <button onclick="cmd('start_karma')">▶ Старт</button>
+                <button class="danger" onclick="cmd('stop_karma')">⏹ Стоп</button>
+            </div>
+        </div>
+        <div class="card">
+            <h2>🔐 PMKID Grabber</h2>
+            <p style="color:var(--dim); font-size:0.85rem; margin-bottom:10px;">Захват PMKID для взлома WPA2/3 через hashcat (режим 22000).</p>
+            <div class="row">
+                <input type="text" id="pmkidBssid" placeholder="BSSID цели" style="width:180px;">
+                <input type="number" id="pmkidCh" value="1" min="1" max="14" style="width:70px;" title="Канал">
+                <button onclick="cmd('grab_pmkid')">🎯 Захватить</button>
+            </div>
+            <div class="divider"></div>
+            <div class="row">
+                <button class="secondary small" onclick="loadPMKID()">📂 Показать хеши</button>
+                <button class="danger small" onclick="cmd('clear_pmkid')">🗑 Очистить</button>
+            </div>
+            <pre id="pmkidOut" style="margin-top:10px;">Нажмите «Показать хеши»</pre>
+        </div>
+        <div class="card">
+            <h2>🛡️ WPA3 SAE Flood</h2>
+            <p style="color:var(--dim); font-size:0.85rem; margin-bottom:10px;">Истощение ресурсов точки доступа WPA3 (экспериментально).</p>
+            <div class="row">
+                <input type="text" id="saeBssid" placeholder="BSSID WPA3 сети" style="width:180px;">
+                <button onclick="cmd('sae_flood')">▶ Запустить</button>
+                <button class="danger" onclick="cmd('stop_sae_flood')">⏹ Стоп</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ BLUETOOTH АТАКИ ═══ -->
+    <div id="ble-attacks" class="tab">
+        <div class="card">
+            <h2>🔷 BLE Spam (All-in-One)</h2>
+            <p style="color:var(--dim); font-size:0.85rem; margin-bottom:10px;">Поочерёдный спам уведомлениями Apple, Google, Microsoft, Samsung.</p>
+            <div class="row">
+                <select id="bleType" style="width:200px;">
+                    <option value="all">Все протоколы</option>
+                    <option value="apple">Только Apple (SourApple + AppleJuice)</option>
+                    <option value="google">Только Google Fast Pair</option>
+                    <option value="microsoft">Только Microsoft Swift Pair</option>
+                    <option value="samsung">Только Samsung</option>
+                </select>
+                <button onclick="cmd('start_ble_spam')">▶ Спамить</button>
+                <button class="danger" onclick="cmd('stop_ble_spam')">⏹ Стоп</button>
+            </div>
+        </div>
+        <div class="card">
+            <h2>📱 AppleJuice</h2>
+            <p style="color:var(--dim); font-size:0.85rem; margin-bottom:10px;">Показ фейковых уведомлений о сопряжении на устройствах Apple.</p>
+            <div class="row">
+                <button onclick="cmd('ble_applejuice')">▶ Запустить</button>
+                <button class="danger" onclick="cmd('stop_ble_spam')">⏹ Стоп</button>
+            </div>
+        </div>
+        <div class="card">
+            <h2>💀 SourApple</h2>
+            <p style="color:var(--dim); font-size:0.85rem; margin-bottom:10px;">Агрессивный BLE-флуд, вызывающий зависание iOS-устройств.</p>
+            <div class="row">
+                <button onclick="cmd('ble_sourapple')">▶ Запустить</button>
+                <button class="danger" onclick="cmd('stop_ble_spam')">⏹ Стоп</button>
+            </div>
+        </div>
+        <div class="card">
+            <h2>🤖 Google Fast Pair Spam</h2>
+            <p style="color:var(--dim); font-size:0.85rem; margin-bottom:10px;">Спам уведомлениями Fast Pair на Android-устройствах.</p>
+            <div class="row">
+                <button onclick="cmd('ble_fastpair')">▶ Запустить</button>
+                <button class="danger" onclick="cmd('stop_ble_spam')">⏹ Стоп</button>
+            </div>
+        </div>
+        <div class="card">
+            <h2>🪟 Microsoft Swift Pair Spam</h2>
+            <p style="color:var(--dim); font-size:0.85rem; margin-bottom:10px;">Спам уведомлениями Swift Pair на Windows.</p>
+            <div class="row">
+                <button onclick="cmd('ble_swiftpair')">▶ Запустить</button>
+                <button class="danger" onclick="cmd('stop_ble_spam')">⏹ Стоп</button>
+            </div>
+        </div>
+        <div class="card">
+            <h2>⭐ Samsung Spam</h2>
+            <p style="color:var(--dim); font-size:0.85rem; margin-bottom:10px;">Спам уведомлениями на устройствах Samsung.</p>
+            <div class="row">
+                <button onclick="cmd('ble_samsung')">▶ Запустить</button>
+                <button class="danger" onclick="cmd('stop_ble_spam')">⏹ Стоп</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ AUTO-PWN ═══ -->
+    <div id="auto-pwn" class="tab">
+        <div class="card">
+            <h2>🎯 Автоматический захват (Auto-Pwn)</h2>
+            <p style="color:var(--dim); font-size:0.85rem; margin-bottom:10px;">
+                ESP32 сам сканирует эфир, находит сети с лучшим сигналом, деаутентифицирует 
+                их и захватывает PMKID/Handshake. Просто включите и положите в карман.
+            </p>
+            <div class="row">
+                <button onclick="cmd('start_auto_pwn')">▶ Запустить Auto-Pwn</button>
+                <button class="danger" onclick="cmd('stop_auto_pwn')">⏹ Остановить</button>
+            </div>
+            <div class="divider"></div>
+            <div class="row">
+                <button class="secondary" onclick="loadPMKID()">📂 Показать захваченные хеши</button>
+            </div>
+            <pre id="autoPwnLog" style="margin-top:10px;">Хеши появятся здесь после захвата</pre>
+        </div>
+    </div>
+
+    <!-- ═══ EVIL PORTAL ═══ -->
+    <div id="evil-portal" class="tab">
+        <div class="card">
+            <h2>🎣 Управление Evil Portal</h2>
+            <p style="color:var(--dim); font-size:0.85rem; margin-bottom:10px;">
+                Создаёт поддельную точку доступа с DNS-перехватом. Все запросы 
+                перенаправляются на фишинговую страницу авторизации.
+            </p>
+            <div class="row">
+                <input type="text" id="portalSsid" value="Corporate_Free_WiFi" style="width:200px;">
+                <button onclick="cmd('set_portal_ssid')">Установить SSID</button>
+                <button onclick="cmd('start_evil_portal')">▶ Запустить</button>
+                <button class="danger" onclick="cmd('stop_evil_portal')">⏹ Стоп</button>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Захваченные учётные данные</h2>
+            <div class="row" style="margin-bottom:10px;">
+                <button class="small secondary" onclick="loadPortalData()">🔄 Обновить</button>
+                <button class="small danger" onclick="cmd('clear_portal_log')">🗑 Очистить</button>
+            </div>
+            <pre id="portalData">Нет данных</pre>
+        </div>
+    </div>
+
+    <!-- ═══ DEVICE INTEL ═══ -->
+    <div id="device-intel" class="tab">
+        <div class="row" style="margin-bottom:16px;">
+            <button onclick="cmd('start_sniffer')">🔎 Запустить сниффер Probe Request</button>
+            <button class="danger" onclick="cmd('stop_sniffer')">⏹ Остановить</button>
+        </div>
+        <div class="card" style="overflow-x:auto;">
+            <table id="clientTable">
+                <thead><tr><th>MAC-адрес</th><th>RSSI</th><th>Искомая сеть (Probe SSID)</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ═══ НАСТРОЙКИ ═══ -->
+    <div id="settings" class="tab">
+        <div class="card">
+            <h2>Информация об устройстве</h2>
+            <p>Плата: <strong>ESP32-S3 UNO N16R8</strong></p>
+            <p>Flash: 16 MB | PSRAM: 8 MB | Ядер: 2 (Xtensa LX7, 240 МГц)</p>
+            <p>AP: Licifer_Setup (192.168.4.1)</p>
+            <div id="sysInfo"></div>
+        </div>
+        <div class="card">
+            <h2>🔒 Изменить пароль точки доступа</h2>
+            <p style="color:var(--dim); font-size:0.85rem; margin-bottom:10px;">
+                После смены пароля потребуется переподключиться к сети заново.
+            </p>
+            <div class="row">
+                <input type="password" id="newPassword" placeholder="Новый пароль (мин. 8 символов)" style="width:280px;">
+                <button onclick="changePassword()">🔒 Сменить пароль</button>
+            </div>
+            <small id="passwordMsg" style="color:var(--success); display:none;">Пароль изменён!</small>
+        </div>
+        <div class="card">
+            <h2>Файловая система</h2>
+            <div class="row">
+                <button class="secondary" onclick="cmd('flush_logs')">💾 Сохранить логи</button>
+                <button class="secondary" onclick="loadPMKID()">📂 PMKID Hashes</button>
+                <button class="secondary" onclick="loadPortalData()">📂 Portal Log</button>
+                <button class="danger small" onclick="if(confirm('Удалить ВСЕ данные?')) cmd('format_fs')">⚠️ Формат LittleFS</button>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+    const ws = new WebSocket('ws://' + location.hostname + '/ws');
+    let networks = [], clientsList = [];
+
+    // Переключение вкладок
+    document.querySelectorAll('aside nav a').forEach(a => {
+        a.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('aside nav a').forEach(l => l.classList.remove('active'));
+            document.getElementById(a.dataset.tab).classList.add('active');
+            a.classList.add('active');
+        });
+    });
+
+    // WebSocket
+    ws.onmessage = e => {
+        try {
+            const d = JSON.parse(e.data);
+            if (d.networks) { networks = d.networks; renderNetworks(); document.getElementById('netCount').textContent = networks.length; }
+            if (d.clients) { clientsList = d.clients; renderClients(); document.getElementById('clientCount').textContent = clientsList.length; }
+            if (d.deauth !== undefined) toggleBadge('deauthBadge', d.deauth);
+            if (d.beacon !== undefined) toggleBadge('beaconBadge', d.beacon);
+            if (d.karma !== undefined) toggleBadge('karmaBadge', d.karma);
+            if (d.ble !== undefined) toggleBadge('bleBadge', d.ble);
+            if (d.auto_pwn !== undefined) toggleBadge('autoPwnBadge', d.auto_pwn);
+            if (d.pmkid_count !== undefined) document.getElementById('pmkidCount').textContent = d.pmkid_count;
+        } catch(ex) { console.error(ex); }
+    };
+
+    function toggleBadge(id, on) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.className = 'status-badge ' + (on ? 'on' : 'off');
+    }
+
+    function cmd(name, payload = {}) {
+        payload.cmd = name;
+        if (name === 'start_deauth') { payload.bssid = gv('deauthBssid'); payload.station = gv('deauthSta'); payload.channel = +gv('deauthCh'); }
+        if (name === 'start_beacon') { payload.count = +gv('beaconCount'); }
+        if (name === 'grab_pmkid') { payload.bssid = gv('pmkidBssid'); payload.channel = +gv('pmkidCh'); }
+        if (name === 'start_ble_spam') { payload.variant = gv('bleType'); }
+        if (name === 'sae_flood') { payload.bssid = gv('saeBssid'); }
+        if (name === 'set_portal_ssid') { payload.ssid = gv('portalSsid'); }
+        ws.send(JSON.stringify(payload));
+    }
+    function gv(id) { return document.getElementById(id)?.value || ''; }
+
+    function renderNetworks() {
+        const tbody = document.querySelector('#netTable tbody');
+        tbody.innerHTML = '';
+        [...networks].sort((a,b) => b.rssi - a.rssi).forEach(n => {
+            const dot = n.rssi > -60 ? 'good' : n.rssi > -75 ? 'mid' : 'bad';
+            tbody.innerHTML += `<tr>
+                <td>${n.ssid || '(скрытая)'}</td>
+                <td>${n.bssid}</td>
+                <td><span class="rssi-dot ${dot}"></span>${n.rssi} дБм</td>
+                <td>${n.channel}</td>
+                <td>${n.enc}</td>
+                <td>${n.wps ? '✅' : '—'}</td>
+                <td>
+                    <button class="small" onclick="document.getElementById('deauthBssid').value='${n.bssid}';document.getElementById('deauthCh').value=${n.channel};document.querySelector('[data-tab=wifi-attacks]').click();">Deauth</button>
+                    <button class="small" onclick="document.getElementById('pmkidBssid').value='${n.bssid}';document.getElementById('pmkidCh').value=${n.channel};document.querySelector('[data-tab=wifi-attacks]').click();">PMKID</button>
+                </td></tr>`;
+        });
+    }
+    function renderClients() {
+        const tbody = document.querySelector('#clientTable tbody');
+        tbody.innerHTML = '';
+        [...clientsList].sort((a,b) => b.rssi - a.rssi).forEach(c => {
+            tbody.innerHTML += `<tr><td>${c.mac}</td><td>${c.rssi} дБм</td><td>${c.ssid || '—'}</td></tr>`;
+        });
+    }
+
+    function loadPMKID() {
+        fetch('/api/pmkid_data').then(r=>r.text()).then(t=>{
+            document.getElementById('pmkidOut').textContent = t || 'Хешей пока нет';
+            document.getElementById('autoPwnLog').textContent = t || 'Хешей пока нет';
+            document.getElementById('pmkidCount').textContent = t ? t.split('\n').filter(l=>l).length : 0;
+        });
+    }
+    function loadPortalData() {
+        fetch('/api/portal_data').then(r=>r.text()).then(t=>{
+            document.getElementById('portalData').textContent = t || 'Нет данных';
+        });
+    }
+
+    function changePassword() {
+        const newPass = document.getElementById('newPassword').value;
+        if (newPass.length < 8) {
+            alert('Пароль должен быть не менее 8 символов');
+            return;
+        }
+        ws.send(JSON.stringify({cmd: 'set_password', password: newPass}));
+        document.getElementById('passwordMsg').style.display = 'block';
+        setTimeout(() => { document.getElementById('passwordMsg').style.display = 'none'; }, 3000);
+    }
+
+    // Обновление системной информации
+    setInterval(() => {
+        fetch('/api/system_info').then(r=>r.json()).then(d=>{
+            document.getElementById('sysInfo').innerHTML = `
+                <p>PSRAM: ${(d.psram_total - d.psram_free) / 1024 | 0} / ${d.psram_total / 1024 | 0} KB</p>
+                <p>Flash: ${(d.flash_total - d.flash_free) / 1024 | 0} / ${d.flash_total / 1024 | 0} KB</p>
+                <p>Uptime: ${(d.uptime / 1000 / 60) | 0} мин</p>
+            `;
+            if (d.temp) {
+                document.getElementById('cpuTemp').textContent = d.temp.toFixed(1);
+                const pct = Math.min((d.psram_total - d.psram_free) / d.psram_total * 100, 100);
+                document.getElementById('psramBar').querySelector('.progress-fill').style.width = pct + '%';
+                document.getElementById('psramText').textContent = `Использовано: ${pct.toFixed(1)}%`;
+            }
+        });
+    }, 5000);
+
+    window.onload = () => {
+        loadPMKID();
+        loadPortalData();
+        cmd('start_scan');
+    };
+</script>
+</body>
+</html>
