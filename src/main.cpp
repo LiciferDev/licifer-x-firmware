@@ -8,7 +8,6 @@
 #include <NimBLEDevice.h>
 #include <NimBLEAdvertising.h>
 #include <DNSServer.h>
-#include <driver/temp_sensor.h>
 
 // ---------- Конфигурация ----------
 #define FORMAT_LITTLEFS_IF_FAILED true
@@ -71,23 +70,6 @@ char* portalLogBuffer = nullptr;
 char* pmkidBuffer = nullptr;
 int portalLogLen = 0, pmkidBufferLen = 0;
 String apPassword = AP_PASS;
-
-// ---------- Встроенный датчик температуры ESP32‑S3 ----------
-float readChipTemp() {
-  static temp_sensor_handle_t temp_handle = nullptr;
-  
-  if (temp_handle == nullptr) {
-    temp_sensor_config_t temp_sensor = TEMP_SENSOR_CONFIG_DEFAULT(-10, 80);
-    temp_sensor_install(&temp_sensor, &temp_handle);
-    temp_sensor_enable(temp_handle);
-  }
-  
-  float tsens_out = 0;
-  if (temp_handle != nullptr) {
-    temp_sensor_read_celsius(temp_handle, &tsens_out);
-  }
-  return tsens_out;
-}
 
 // ---------- Работа с логами ----------
 void flushPortalLog() {
@@ -223,18 +205,6 @@ void wifiAttackTask(void*) {
   const char* ssids[] = {"FreeWiFi","Starbucks","Airport_Free","Hotel_Guest"};
   unsigned long lastDeauth=0, lastBeacon=0, lastKarma=0;
   while(1) {
-    // Термоконтроль: снижаем мощность BLE при перегреве
-    static unsigned long lastTempCheck=0;
-    if (millis()-lastTempCheck > 5000) {
-      lastTempCheck = millis();
-      float temp = readChipTemp();
-      if (temp > 70.0) {
-        NimBLEDevice::setPower(ESP_PWR_LVL_P3);
-      } else {
-        NimBLEDevice::setPower(ESP_PWR_LVL_P9);
-      }
-    }
-
     if (attack.deauth && millis()-lastDeauth>150) {
       lastDeauth=millis();
       sendDeauthPacket(attack.deauth_bssid, attack.deauth_ch);
@@ -429,7 +399,6 @@ void webServerTask(void*) {
     StaticJsonDocument<256> info;
     info["psram_free"] = ESP.getFreePsram();
     info["uptime"] = millis();
-    info["temp"] = readChipTemp();
     String j; serializeJson(info,j);
     r->send(200,"application/json",j);
   });
