@@ -5,7 +5,7 @@ on:
     paths-ignore:
       - '**.md'
   pull_request:
-  workflow_dispatch:
+  workflow_dispatch:  # позволяет запускать вручную
 
 jobs:
   build:
@@ -40,22 +40,29 @@ jobs:
 
       - name: Merge into single flashable binary
         run: |
-          BOOTLOADER="$HOME/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/bin/bootloader_qio_80m.bin"
-          PARTITIONS=".pio/build/esp32-s3-n16r8/partitions_custom.bin"
-          FIRMWARE=".pio/build/esp32-s3-n16r8/firmware.bin"
-          LITTLEFS=".pio/build/esp32-s3-n16r8/littlefs.bin"
-          MERGED="licifer_x_n16r8_full.bin"
+          # Путь к bootloader.bin, сгенерированному PlatformIO при сборке
+          BOOTLOADER_BIN=".pio/build/esp32-s3-n16r8/bootloader.bin"
+          # Путь к boot_app0.bin (берется из самого фреймворка)
+          BOOT_APP0_BIN="$HOME/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin"
+          
+          # Проверяем, что bootloader.bin существует
+          if [ ! -f "$BOOTLOADER_BIN" ]; then
+            echo "Error: $BOOTLOADER_BIN not found!"
+            echo "Available files in .pio/build/esp32-s3-n16r8/:"
+            ls .pio/build/esp32-s3-n16r8/
+            exit 1
+          fi
 
-          python -m esptool --chip esp32s3 merge_bin \
-            -o $MERGED \
-            --flash_mode qio \
-            --flash_freq 80m \
-            --flash_size 16MB \
-            0x0 "$BOOTLOADER" \
-            0x8000 "$PARTITIONS" \
-            0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
-            0x10000 "$FIRMWARE" \
-            0x610000 "$LITTLEFS"
+          python -m esptool --chip esp32s3 merge-bin \
+            -o licifer_x_n16r8_full.bin \
+            --flash-mode qio \
+            --flash-freq 80m \
+            --flash-size 16MB \
+            0x0 "$BOOTLOADER_BIN" \
+            0x8000 .pio/build/esp32-s3-n16r8/partitions_custom.bin \
+            0xe000 "$BOOT_APP0_BIN" \
+            0x10000 .pio/build/esp32-s3-n16r8/firmware.bin \
+            0x610000 .pio/build/esp32-s3-n16r8/littlefs.bin
 
       - name: Upload merged firmware
         uses: actions/upload-artifact@v4
